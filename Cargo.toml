@@ -1,0 +1,16 @@
+[package]
+name = "blasted"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Boy Maas <boy.maas@gmail.com>"]
+description = "Composable editor in rust, crates as plugins"
+homepage = "https://github.com/blasted-rs"
+repository = "https://github.com/blasted-rs"
+
+# warning: manifest has no description, license, license-file, documentation, homepage or repository.
+# See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
