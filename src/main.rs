@@ -1,3 +1,6 @@
+use blasted::Core;
+use std::str::FromStr;
+
 fn main() {
-    println!("Hello, world!");
+    let _core = Core::from_str("Hello world!");
 }
