@@ -1,3 +1,3 @@
 mod core;
 
-pub use crate::core::Core;
+pub use crate::core::Document;

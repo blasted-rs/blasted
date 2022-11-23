@@ -1,6 +1,6 @@
-use blasted::Core;
+use blasted::Document;
 use std::str::FromStr;
 
 fn main() {
-    let _core = Core::from_str("Hello world!");
+    let _core = Document::from_str("Hello world!");
 }
