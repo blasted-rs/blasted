@@ -1,6 +1,5 @@
-use blasted::Document;
-use std::str::FromStr;
+use blasted::core::Editor;
 
 fn main() {
-    let _core = Document::from_str("Hello world!");
+  let _editor = Editor::default();
 }
