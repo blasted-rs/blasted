@@ -1,14 +1,32 @@
-use std::{str::FromStr, convert::Infallible, collections::HashMap};
+use std::{collections::HashMap, convert::Infallible, str::FromStr};
 
 use ropey::Rope;
 use slotmap::{new_key_type, SlotMap};
 
-// Terminal =>  KeyStores =>  View => EditingModel => Events => Document
+// Terminal => KeyEvents => Views => KeyMap => EditModel => (DocumentEvent => Document)
 //
-// Event::JumpToNextWord(view_id)
-// Event::NextBlock(view_id)
+// 2dw: delete the next two words
 //
+// one two tree four
 //
+// KeyEvents:
+// <ESC> => ModelEditing in NORMAL mode
+// 2 => triggers a state in ModelEditing (no DocumentEvents are generated)
+// d => ModelEditing
+// w => ModelEditing
+// DocumentEvents
+//   Document
+//      cursor
+//      2x DocumentEvent::DeleteToNextWord
+//
+// Document
+//   implement all the jumps possible in vim
+//   we can implement plain editing and all other
+//   etings
+//
+//  Higly customizable system
+//
+// INSERT
 
 // Document
 //   text
@@ -26,7 +44,7 @@ new_key_type! { pub struct DocumentId; }
 #[derive(Default)]
 pub struct Editor {
     views: SlotMap<ViewId, View>,
-    documents: SlotMap<DocumentId, Document>
+    documents: SlotMap<DocumentId, Document>,
 }
 
 impl Editor {
@@ -59,7 +77,6 @@ impl Document {
     fn new_view(&mut self, view: ViewId) {
         self.cursor.insert(view, Default::default());
     }
-
 }
 
 impl FromStr for Document {
@@ -72,7 +89,6 @@ impl FromStr for Document {
         })
     }
 }
-
 
 #[cfg(test)]
 mod test {
@@ -90,7 +106,7 @@ mod test {
 
         // check if we created the cursor in the document
         let document = editor.documents.get(document_id).unwrap();
-        assert_eq!(document.cursor[&view_id], (0,0));
+        assert_eq!(document.cursor[&view_id], (0, 0));
     }
 
     #[test]
