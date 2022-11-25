@@ -105,7 +105,7 @@ impl Document {
 fn mod_cursor<'a, 'b>(
   r: &'b RopeSlice,
   mfn: &'a impl Fn(&'a RopeSlice, &(usize, usize)) -> (usize, usize),
-) -> impl FnMut(&mut (usize, usize)) + 'a
+) -> impl Fn(&mut (usize, usize)) + 'a
 where
   'b: 'a,
 {
@@ -122,7 +122,7 @@ pub enum DocumentEvent {
 
 pub mod movement {
   pub mod jump {
-    use ropey::RopeSlice;
+    use ropey::{RopeSlice };
     pub fn next_word(
       t: &RopeSlice,
       (line, pos): &(usize, usize),
@@ -145,6 +145,21 @@ pub mod movement {
       }
 
       (*line, pos + counter)
+    }
+
+    #[test]
+    fn test_next_word() {
+        let r = ropey::Rope::from_str("one two three          four\nfive six");
+
+        assert_eq!(next_word(&r.slice(..), &(0,0)), (0,4));
+        assert_eq!(next_word(&r.slice(..), &(0,2)), (0,4));
+
+        assert_eq!(next_word(&r.slice(..), &(0,4)), (0,8));
+        assert_eq!(next_word(&r.slice(..), &(0,15)), (0,23));
+
+        // TODO: stops at end of line, and does not continue
+        assert_eq!(next_word(&r.slice(..), &(0,24)), (0,28));
+        assert_eq!(next_word(&r.slice(..), &(0,28)), (0,28));
     }
   }
 }
