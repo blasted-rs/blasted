@@ -2,6 +2,7 @@ use {
   ropey::Rope,
   slotmap::{new_key_type, SlotMap},
   std::{collections::HashMap, convert::Infallible, str::FromStr},
+  thiserror::Error,
 };
 
 // Terminal => KeyEvents => View => KeyMap => EditingModel => (DocumentEvent =>
@@ -72,8 +73,22 @@ impl Editor {
 
 #[derive(Default)]
 pub struct View {
-  // offset: (usize, usize),
+  offset: (usize, usize),
 }
+
+impl View {}
+
+pub enum Event {
+  MoveWord,
+}
+
+#[derive(Error, Debug)]
+pub enum DocumentError {
+  #[error("Noop")]
+  Noop,
+}
+
+pub type DocumentResult<T> = Result<T, DocumentError>;
 
 #[derive(Default)]
 pub struct Document {
@@ -85,6 +100,42 @@ impl Document {
   pub fn new_view(&mut self, view: ViewId) {
     self.cursor.insert(view, Default::default());
   }
+
+  pub fn process(
+    &mut self,
+    view_id: &ViewId,
+    event: Event,
+  ) -> DocumentResult<()> {
+    // TODO: better error type
+    let rope = self.rope.slice(..);
+
+    match event {
+      Event::MoveWord => {
+        self.cursor.entry(*view_id).and_modify(|c| {
+          *c = movement::jumps::next_word(&rope, c);
+        });
+      }
+    }
+
+    Ok(())
+  }
+}
+
+#[test]
+fn test_processing_of_events() {
+  let mut editor = Editor::default();
+  let document = editor.create_document();
+  let view = editor.create_view(document).unwrap();
+
+  let mut document = editor.documents.get_mut(document).unwrap();
+
+  document.rope.insert(0, "one two three four");
+
+  document.process(&view, Event::MoveWord).unwrap();
+  assert_eq!(document.cursor.get(&view), Some(&(0, 4)));
+
+  document.process(&view, Event::MoveWord).unwrap();
+  assert_eq!(document.cursor.get(&view), Some(&(0, 8)));
 }
 
 impl FromStr for Document {

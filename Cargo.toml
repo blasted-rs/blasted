@@ -16,3 +16,4 @@ repository = "https://github.com/blasted-rs/bed"
 [dependencies]
 ropey = "1.5.0"
 slotmap = "1.0.6"
+thiserror = "1.0.37"
