@@ -1,3 +1,6 @@
-pub mod core;
+pub mod document;
+pub mod editor;
+pub mod movement;
+pub mod view;
 
-pub use crate::core::Document;
+pub use document::Document;
