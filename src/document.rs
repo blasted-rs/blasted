@@ -14,8 +14,8 @@ pub enum Event {
 
 #[derive(Error, Debug)]
 pub enum DocumentError {
-  #[error("Noop")]
-  Noop,
+  #[error("Trying to access a non-existent view")]
+  ViewNotPresent,
 }
 
 pub type DocumentResult<T> = Result<T, DocumentError>;
@@ -36,6 +36,10 @@ impl Document {
     view_id: &ViewId,
     event: Event,
   ) -> DocumentResult<()> {
+    if !self.cursor.contains_key(view_id) {
+      return Err(DocumentError::ViewNotPresent);
+    };
+
     // TODO: better error type
     let rope = self.rope.slice(..);
 
