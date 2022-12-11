@@ -1,3 +1,5 @@
+use blasted::{editor::Editor, view::ViewId};
+
 use {
   anyhow::Result,
   blasted::Document,
@@ -47,20 +49,48 @@ impl AreaExt for Rect {
 
 struct Application {
   terminal: Terminal<CrosstermBackend<std::io::Stdout>>,
+  editor: Editor,
+  active_view: Option<ViewId>,
   last_event: Option<Event>,
 }
 
 impl Application {
   fn new(terminal: Terminal<CrosstermBackend<std::io::Stdout>>) -> Self {
-    Self { terminal, last_event: None }
+    Self { terminal, editor: Editor::default(), last_event: None, active_view: None }
   }
 
-  pub fn render(&mut self) {
+  pub fn set_active_view(&mut self, view: ViewId) {
+    self.active_view = Some(view);
+  }
+
+
+  pub fn render(&mut self, frame: usize) {
     let area = self.terminal.size().unwrap();
     let surface = self.terminal.current_buffer_mut();
 
+    // draw frames right top
+    surface.set_string(area.width - 4, 0, &format!("F{}", frame % 1000), Style::default());
+
+    if let Some(view) = self.editor.active_view {
+        let view = self.editor.views.get(view).unwrap();
+        let document = self.editor.documents.get(view.document_id).unwrap();
+
+        for (y,line) in document.lines().enumerate() {
+            if y >= area.height as usize {
+                break;
+            }
+            surface.set_string(0, y as u16, line, Style::default());
+        }
+    }
+
+    // if let Some(document) = &self.document {
+    //     for (y, line) in document.rope.lines().enumerate() {
+    //         surface.set_string(0, y as u16, line.to_string(), Style::default());
+    //     }
+    // }
+
     // write to surface
-    Self::render_bufferline(area.with_height(1), surface);
+    // Self::render_bufferline(area.with_height(1), surface);
 
     if let Some(event) = &self.last_event {
         surface.set_string(0, 10, format!("{:?}", event), Style::default());
@@ -83,7 +113,8 @@ impl Application {
   }
 
   pub async fn run(&mut self, events: &mut EventStream) {
-    self.render();
+    self.render(0);
+    let mut frames = 0;
     while let Some(Ok(event)) = events.next().await {
 
       if let Event::Key(KeyEvent {
@@ -97,14 +128,14 @@ impl Application {
       }
 
       self.last_event = Some(event);
-      self.render();
+      frames += 1;
+      self.render(frames);
     }
   }
 }
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
-  let _core = Document::from_str("Hello world!");
 
   crossterm::terminal::enable_raw_mode().unwrap();
 
@@ -128,6 +159,11 @@ async fn main() -> Result<()> {
   let mut events = EventStream::new();
 
   let mut app = Application::new(terminal);
+
+  // active_view is set when opening a file
+  let ( document_id, view_id ) = app.editor.open("src/main.rs")?;
+
+  // app.set_active_view(view_id);
 
   app.run(&mut events).await;
 

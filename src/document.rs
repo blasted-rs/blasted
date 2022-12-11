@@ -16,6 +16,8 @@ pub enum Event {
 pub enum DocumentError {
   #[error("Trying to access a non-existent view")]
   ViewNotPresent,
+  #[error(transparent)]
+  IoError(#[from] std::io::Error),
 }
 
 pub type DocumentResult<T> = Result<T, DocumentError>;
@@ -29,6 +31,15 @@ pub struct Document {
 impl Document {
   pub fn new_view(&mut self, view: ViewId) {
     self.cursor.insert(view, Default::default());
+  }
+
+  pub fn from_reader(path: impl AsRef<std::path::Path>) -> DocumentResult<Self> {
+    let rope = Rope::from_reader(std::fs::File::open(path)?)?;
+    Ok(Self { rope, cursor: Default::default() })
+  }
+
+  pub fn lines(&'_ self) -> impl Iterator<Item = String> + '_ {
+    self.rope.lines().map(|line| line.to_string())
   }
 
   pub fn process(

@@ -1,29 +1,65 @@
+use crate::document::DocumentError;
+
 use {
   crate::{
     document::{Document, DocumentId},
     view::{View, ViewId},
   },
   slotmap::SlotMap,
+  thiserror::Error,
 };
 
 #[derive(Default)]
 pub struct Editor {
-  views: SlotMap<ViewId, View>,
-  documents: SlotMap<DocumentId, Document>,
+  pub views: SlotMap<ViewId, View>,
+  pub documents: SlotMap<DocumentId, Document>,
+  pub active_view: Option<ViewId>,
 }
 
-impl Editor {
-  pub fn create_view(&mut self, document: DocumentId) -> Option<ViewId> {
-    let view = self.views.insert(View::default());
+#[derive(Debug, Error)]
+pub enum EditorError {
+  #[error("Trying to access a non-existent view")]
+  ViewNotPresent,
+  #[error("Trying to access a non-existent document")]
+  DocumentNotPresent,
+  #[error(transparent)]
+  IoError(#[from] std::io::Error),
+  #[error(transparent)]
+  DocumentError(#[from] DocumentError),
+}
 
-    let document = self.documents.get_mut(document)?;
+type EditorResult<T> = Result<T, EditorError>;
+
+impl Editor {
+  pub fn create_view(&mut self, document: DocumentId) -> EditorResult<ViewId> {
+    let view = self.views.insert(View::new(document));
+
+    let document = self.documents.get_mut(document).ok_or(EditorError::DocumentNotPresent)?;
     document.new_view(view);
 
-    Some(view)
+    // set active view if none is set
+    if self.active_view.is_none() {
+      self.active_view = Some(view);
+    }
+
+    Ok(view)
   }
 
   pub fn create_document(&mut self) -> DocumentId {
     self.documents.insert(Document::default())
+  }
+
+  pub fn open(
+    &mut self,
+    path: impl AsRef<std::path::Path>,
+  ) -> EditorResult<( DocumentId, ViewId )> {
+    // load path into a rope
+    let document = Document::from_reader(path)?;
+
+    // add to editor
+    let document_id = self.documents.insert(document);
+    let view_id = self.create_view(document_id)?;
+    Ok((document_id, view_id))
   }
 }
 
