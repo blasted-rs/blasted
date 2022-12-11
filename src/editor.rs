@@ -1,12 +1,18 @@
-use crate::document::DocumentError;
-
 use {
   crate::{
-    document::{Document, DocumentId},
+    application::{
+      Application,
+      Plugin,
+      PluginError,
+      ProcessEvent,
+    },
+    document::{Document, DocumentError, DocumentId},
     view::{View, ViewId},
   },
+  crossterm::event::Event,
   slotmap::SlotMap,
   thiserror::Error,
+  tui::{buffer::Buffer as TuiBuffer, layout::Rect},
 };
 
 #[derive(Default)]
@@ -34,7 +40,10 @@ impl Editor {
   pub fn create_view(&mut self, document: DocumentId) -> EditorResult<ViewId> {
     let view = self.views.insert(View::new(document));
 
-    let document = self.documents.get_mut(document).ok_or(EditorError::DocumentNotPresent)?;
+    let document = self
+      .documents
+      .get_mut(document)
+      .ok_or(EditorError::DocumentNotPresent)?;
     document.new_view(view);
 
     // set active view if none is set
@@ -52,7 +61,7 @@ impl Editor {
   pub fn open(
     &mut self,
     path: impl AsRef<std::path::Path>,
-  ) -> EditorResult<( DocumentId, ViewId )> {
+  ) -> EditorResult<(DocumentId, ViewId)> {
     // load path into a rope
     let document = Document::from_reader(path)?;
 
@@ -60,6 +69,37 @@ impl Editor {
     let document_id = self.documents.insert(document);
     let view_id = self.create_view(document_id)?;
     Ok((document_id, view_id))
+  }
+}
+
+impl Plugin for Editor {
+  fn id(&self) -> Option<&'static str> {
+    Some("editor")
+  }
+
+  fn init(&self, _app: &Application) -> Result<(), PluginError> {
+    // TODO: load files from disk
+    Ok(())
+  }
+
+  fn process_event(
+    &self,
+    _app: &mut Application,
+    _event: &Event,
+  ) -> Result<ProcessEvent, PluginError> {
+    // here we match on the event and do something
+    // inside our active view
+    Ok(ProcessEvent::Ignored)
+  }
+
+  fn render(
+    &mut self,
+    _app: &mut Application,
+    _area: &Rect,
+    _frame: &mut TuiBuffer,
+  ) {
+    // render the active view and the command bar
+    // or is the command bar a separate plugin?
   }
 }
 
