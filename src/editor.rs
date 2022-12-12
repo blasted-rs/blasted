@@ -1,3 +1,6 @@
+use crossterm::event::KeyCode;
+use tui::style::Style;
+
 use {
   crate::{
     application::{
@@ -87,19 +90,28 @@ impl Plugin for Editor {
     _app: &mut Application,
     _event: &Event,
   ) -> Result<ProcessEvent, PluginError> {
-    // here we match on the event and do something
-    // inside our active view
-    Ok(ProcessEvent::Ignored)
+
+    if let Event::Key(key) = _event {
+        if let KeyCode::Char('q') = key.code {
+            println!("Quitting");
+            if let Err(e) = _app.quit() {
+                tracing::error!("Failed to quit: {}", e);
+            }
+        }
+    }
+
+    Ok(ProcessEvent::Consumed)
   }
 
   fn render(
     &mut self,
     _app: &mut Application,
     _area: &Rect,
-    _frame: &mut TuiBuffer,
+    frame: &mut TuiBuffer,
   ) {
     // render the active view and the command bar
     // or is the command bar a separate plugin?
+    frame.set_string(0, 0, "Hello World", Style::default());
   }
 }
 

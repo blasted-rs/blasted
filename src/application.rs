@@ -4,6 +4,7 @@ use {
   futures::StreamExt,
   std::collections::VecDeque,
   thiserror::Error,
+  tokio::sync::mpsc::{error::SendError, UnboundedSender},
   tui::{
     backend::CrosstermBackend,
     buffer::Buffer as TuiBuffer,
@@ -59,7 +60,14 @@ pub enum ApplicationError {
   #[error(transparent)]
   PluginError(#[from] PluginError),
   #[error(transparent)]
+  SendCommandError(#[from] SendError<Command>),
+  #[error(transparent)]
   IoError(#[from] std::io::Error),
+}
+
+#[derive(Debug)]
+pub enum Command {
+  Quit,
 }
 
 pub struct Application {
@@ -67,6 +75,7 @@ pub struct Application {
   plugins: Vec<Box<dyn Plugin>>,
   active_plugins: VecDeque<Box<dyn Plugin>>,
   terminal: Option<TuiTerminal>,
+  cmd: Option<UnboundedSender<Command>>,
 }
 
 impl Application {
@@ -76,11 +85,22 @@ impl Application {
       editor: Some(Editor::default()),
       plugins: Vec::new(),
       active_plugins: VecDeque::new(),
+      cmd: None,
     }
   }
 
   pub fn register_plugin(&mut self, plugin: Box<dyn Plugin>) {
     self.plugins.push(plugin);
+  }
+
+  pub fn quit(&mut self) -> Result<(), ApplicationError> {
+    if let Some(cmd) = self.cmd.take() {
+      cmd.send(Command::Quit)?;
+    } else {
+      tracing::warn!("Application::quit() called without a command channel");
+    }
+
+    Ok(())
   }
 
   /// run our application plugin system
@@ -89,53 +109,70 @@ impl Application {
     &mut self,
     events: &mut EventStream,
   ) -> Result<(), ApplicationError> {
-    while let Some(Ok(event)) = events.next().await {
-      // first process the event with the active plugins, notice
-      // we are moving the plugin out of the active_plugins list
-      let mut consumed = false;
-      let mut processed_plugins = VecDeque::new();
-      while let Some(plugin) = self.active_plugins.pop_back() {
-        consumed =
-          matches!(plugin.process_event(self, &event)?, ProcessEvent::Consumed);
-        processed_plugins.push_front(plugin);
-        if consumed {
-          break;
-        }
-      }
-      // restoring the plugins
-      self.active_plugins.append(&mut processed_plugins);
+    let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
+    self.cmd = Some(cmd_tx);
 
-      // now process the event with on editor
-      if !consumed {
-        if let Some(editor) = self.editor.take() {
-          editor.process_event(self, &event)?;
-          self.editor = Some(editor);
-        }
-      }
-
-      // now after we processed all the events
-      // lets render the plugins
-      if let Some(mut terminal) = self.terminal.take() {
-          let area = terminal.size()?;
-          let surface = terminal.current_buffer_mut();
-
-          // process the plugins
-          let mut processed_plugins = VecDeque::new();
-          while let Some(mut plugin) = self.active_plugins.pop_front() {
-              plugin.render(self, &area, surface);
-              processed_plugins.push_back(plugin);
+    let mut fused_events = events.fuse();
+    loop {
+      tokio::select! {
+          cmd = cmd_rx.recv() => {
+              match cmd {
+                  Some(Command::Quit) => {
+                      return Ok(());
+                  }
+                  _ => {}
+              }
           }
-          self.active_plugins.append(&mut processed_plugins);
 
-          // the last plugin to redner is our editor plugin
-          if let Some(mut editor) = self.editor.take() {
-              editor.render(self, &area, surface);
-              self.editor = Some(editor);
+          Ok(event) = fused_events.select_next_some() => {
+              // first process the event with the active plugins, notice
+              // we are moving the plugin out of the active_plugins list
+              let mut consumed = false;
+              let mut processed_plugins = VecDeque::new();
+              while let Some(plugin) = self.active_plugins.pop_back() {
+                  consumed =
+                      matches!(plugin.process_event(self, &event)?, ProcessEvent::Consumed);
+                  processed_plugins.push_front(plugin);
+                  if consumed {
+                      break;
+                  }
+              }
+              // restoring the plugins
+              self.active_plugins.append(&mut processed_plugins);
+
+              // now process the event with on editor
+              if !consumed {
+                  if let Some(editor) = self.editor.take() {
+                      editor.process_event(self, &event)?;
+                      self.editor = Some(editor);
+                  }
+              }
+
+              // now after we processed all the events
+              // lets render the plugins
+              if let Some(mut terminal) = self.terminal.take() {
+                  let area = terminal.size()?;
+                  let surface = terminal.current_buffer_mut();
+
+                  // process the plugins
+                  let mut processed_plugins = VecDeque::new();
+                  while let Some(mut plugin) = self.active_plugins.pop_front() {
+                      plugin.render(self, &area, surface);
+                      processed_plugins.push_back(plugin);
+                  }
+                  self.active_plugins.append(&mut processed_plugins);
+
+                  // the last plugin to redner is our editor plugin
+                  if let Some(mut editor) = self.editor.take() {
+                      editor.render(self, &area, surface);
+                      self.editor = Some(editor);
+                  }
+
+                  terminal.draw(|f| f.set_cursor(0, 0))?;
+              }
           }
       }
-
     }
-    Ok(())
   }
 }
 
