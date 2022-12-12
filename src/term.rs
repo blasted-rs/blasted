@@ -21,7 +21,10 @@ use {
   tui::{backend::CrosstermBackend, Terminal},
 };
 
-pub fn claim_terminal() -> Result<(Terminal<CrosstermBackend<std::io::Stdout>>, EventStream), std::io::Error>  {
+pub fn claim_terminal() -> Result<
+  (Terminal<CrosstermBackend<std::io::Stdout>>, EventStream),
+  std::io::Error,
+> {
   crossterm::terminal::enable_raw_mode().unwrap();
 
   let mut stdout = std::io::stdout();

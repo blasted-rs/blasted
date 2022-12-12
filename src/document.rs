@@ -8,7 +8,7 @@ use {
 
 new_key_type! { pub struct DocumentId; }
 
-pub enum Event {
+pub enum DocEvent {
   MoveWord,
 }
 
@@ -33,9 +33,14 @@ impl Document {
     self.cursor.insert(view, Default::default());
   }
 
-  pub fn from_reader(path: impl AsRef<std::path::Path>) -> DocumentResult<Self> {
+  pub fn from_reader(
+    path: impl AsRef<std::path::Path>,
+  ) -> DocumentResult<Self> {
     let rope = Rope::from_reader(std::fs::File::open(path)?)?;
-    Ok(Self { rope, cursor: Default::default() })
+    Ok(Self {
+      rope,
+      cursor: Default::default(),
+    })
   }
 
   pub fn lines(&'_ self) -> impl Iterator<Item = String> + '_ {
@@ -45,7 +50,7 @@ impl Document {
   pub fn process(
     &mut self,
     view_id: &ViewId,
-    event: Event,
+    event: &DocEvent,
   ) -> DocumentResult<()> {
     if !self.cursor.contains_key(view_id) {
       return Err(DocumentError::ViewNotPresent);
@@ -55,7 +60,7 @@ impl Document {
     let rope = self.rope.slice(..);
 
     match event {
-      Event::MoveWord => {
+      DocEvent::MoveWord => {
         self.cursor.entry(*view_id).and_modify(|c| {
           *c = movement::jumps::next_word(&rope, c);
         });
@@ -91,10 +96,10 @@ mod tests {
     let view_id = ViewId::default();
     document.new_view(view_id);
 
-    document.process(&view_id, Event::MoveWord).unwrap();
+    document.process(&view_id, &DocEvent::MoveWord).unwrap();
     assert_eq!(document.cursor.get(&view_id), Some(&(0, 4)));
 
-    document.process(&view_id, Event::MoveWord).unwrap();
+    document.process(&view_id, &DocEvent::MoveWord).unwrap();
     assert_eq!(document.cursor.get(&view_id), Some(&(0, 8)));
   }
 

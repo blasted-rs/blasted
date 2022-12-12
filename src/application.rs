@@ -1,7 +1,6 @@
 use {
   crate::editor::Editor,
-
-  crossterm::event::{Event, EventStream},
+  crossterm::event::{Event as TuiEvent, EventStream},
   futures::StreamExt,
   std::collections::VecDeque,
   thiserror::Error,
@@ -18,6 +17,8 @@ use {
 pub enum PluginError {
   #[error("Could not initialize plugin {0}")]
   InitFailed(String),
+  #[error(transparent)]
+  Other(#[from] anyhow::Error),
 }
 
 pub enum ProcessEvent {
@@ -32,16 +33,13 @@ pub trait Plugin {
   }
   fn init(&self, app: &Application) -> Result<(), PluginError>;
   fn process_event(
-    &self,
+    &mut self,
     app: &mut Application,
-    event: &Event,
+    event: &TuiEvent,
   ) -> Result<ProcessEvent, PluginError>;
 
   /// Get cursor position and cursor kind.
-  fn cursor(
-    &self,
-    _area: Rect,
-  ) -> Option<(u16, u16)> {
+  fn cursor(&self, _area: Rect) -> Option<(u16, u16)> {
     None
   }
   /// Render the plugin onto the provided surface.
@@ -71,7 +69,7 @@ pub enum Command {
 }
 
 pub struct Application {
-  editor: Option<Editor>,
+  pub editor: Option<Editor>,
   plugins: Vec<Box<dyn Plugin>>,
   active_plugins: VecDeque<Box<dyn Plugin>>,
   terminal: Option<TuiTerminal>,
@@ -115,77 +113,85 @@ impl Application {
     let mut fused_events = events.fuse();
     loop {
       tokio::select! {
-          cmd = cmd_rx.recv() => {
-              match cmd {
-                  Some(Command::Quit) => {
-                      return Ok(());
-                  }
-                  _ => {}
-              }
+        cmd = cmd_rx.recv() => {
+          match cmd {
+            Some(Command::Quit) => {
+              return Ok(());
+            }
+            _ => {}
+          }
+        }
+
+        Ok(event) = fused_events.select_next_some() => {
+          // first process the event with the active plugins, notice
+          // we are moving the plugin out of the active_plugins list
+          let mut consumed = false;
+          let mut processed_plugins = VecDeque::new();
+          while let Some(mut plugin) = self.active_plugins.pop_back() {
+            consumed =
+              matches!(plugin.process_event(self, &event)?, ProcessEvent::Consumed);
+            processed_plugins.push_front(plugin);
+            if consumed {
+              break;
+            }
+          }
+          // restoring the plugins
+          self.active_plugins.append(&mut processed_plugins);
+
+          // now process the event with on editor
+          if !consumed {
+            if let Some(mut editor) = self.editor.take() {
+              editor.process_event(self, &event)?;
+              self.editor = Some(editor);
+            }
           }
 
-          Ok(event) = fused_events.select_next_some() => {
-              // first process the event with the active plugins, notice
-              // we are moving the plugin out of the active_plugins list
-              let mut consumed = false;
-              let mut processed_plugins = VecDeque::new();
-              while let Some(plugin) = self.active_plugins.pop_back() {
-                  consumed =
-                      matches!(plugin.process_event(self, &event)?, ProcessEvent::Consumed);
-                  processed_plugins.push_front(plugin);
-                  if consumed {
-                      break;
-                  }
+          // now after we processed all the events
+          // lets render the plugins
+          if let Some(mut terminal) = self.terminal.take() {
+            let area = terminal.size()?;
+            let surface = terminal.current_buffer_mut();
+
+            // process the plugins
+            let mut processed_plugins = VecDeque::new();
+            while let Some(mut plugin) = self.active_plugins.pop_front() {
+              plugin.render(self, &area, surface);
+              processed_plugins.push_back(plugin);
+            }
+            self.active_plugins.append(&mut processed_plugins);
+
+            // the last plugin to render is our editor plugin
+            if let Some(mut editor) = self.editor.take() {
+              editor.render(self, &area, surface);
+              self.editor = Some(editor);
+            }
+
+            // set the cursor position
+            let mut cursor = self.active_plugins
+              .iter()
+              .rev()
+              .find_map(|p| p.cursor(area));
+
+            // when no cursor set yet, try the editor
+            if cursor.is_none() {
+              if let Some(editor) = &self.editor {
+                cursor = editor.cursor(area);
               }
-              // restoring the plugins
-              self.active_plugins.append(&mut processed_plugins);
+            }
 
-              // now process the event with on editor
-              if !consumed {
-                  if let Some(editor) = self.editor.take() {
-                      editor.process_event(self, &event)?;
-                      self.editor = Some(editor);
-                  }
-              }
+            // set the cursor
+            let (line,pos) = cursor.unwrap_or((0,0));
 
-              // now after we processed all the events
-              // lets render the plugins
-              if let Some(mut terminal) = self.terminal.take() {
-                  let area = terminal.size()?;
-                  let surface = terminal.current_buffer_mut();
+            surface.set_stringn(area.width-5, area.height-1,
+                                format!("{}:{}", line, pos),
+                                20,
+                                tui::style::Style::default());
 
-                  // process the plugins
-                  let mut processed_plugins = VecDeque::new();
-                  while let Some(mut plugin) = self.active_plugins.pop_front() {
-                      plugin.render(self, &area, surface);
-                      processed_plugins.push_back(plugin);
-                  }
-                  self.active_plugins.append(&mut processed_plugins);
+            terminal.draw(|f| f.set_cursor(pos, line))?;
 
-                  // the last plugin to render is our editor plugin
-                  if let Some(mut editor) = self.editor.take() {
-                      editor.render(self, &area, surface);
-                      self.editor = Some(editor);
-                  }
-
-                  // set the cursor position
-                  let mut cursor = self.active_plugins
-                      .iter()
-                      .rev()
-                      .find_map(|p| p.cursor(area));
-
-                  // when no cursor set yet, try the editor
-                  if cursor.is_none() {
-                      if let Some(editor) = &self.editor {
-                          cursor = editor.cursor(area);
-                      }
-                  }
-
-                  // set the cursor
-                  let (x,y) = cursor.unwrap_or((0,0));
-                  terminal.draw(|f| f.set_cursor(x, y))?;
-              }
+            self.terminal = Some(terminal);
           }
+        }
       }
     }
   }

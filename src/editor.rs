@@ -1,10 +1,11 @@
 use {
   crate::{
     application::{Application, Plugin, PluginError, ProcessEvent},
-    document::{Document, DocumentError, DocumentId},
+    document::{DocEvent, Document, DocumentError, DocumentId},
     view::{View, ViewId},
   },
-  crossterm::event::{Event, KeyCode},
+  anyhow::Error as AnyError,
+  crossterm::event::{Event as TuiEvent, KeyCode},
   slotmap::SlotMap,
   thiserror::Error,
   tui::{buffer::Buffer as TuiBuffer, layout::Rect, style::Style},
@@ -32,21 +33,35 @@ pub enum EditorError {
 type EditorResult<T> = Result<T, EditorError>;
 
 impl Editor {
-  pub fn create_view(&mut self, document: DocumentId) -> EditorResult<ViewId> {
-    let view = self.views.insert(View::new(document));
+  pub fn create_view(
+    &mut self,
+    document_id: DocumentId,
+  ) -> EditorResult<ViewId> {
+    let view_id = self.views.insert(View::new(document_id));
 
     let document = self
       .documents
-      .get_mut(document)
+      .get_mut(document_id)
       .ok_or(EditorError::DocumentNotPresent)?;
-    document.new_view(view);
+    document.new_view(view_id);
 
     // set active view if none is set
     if self.active_view.is_none() {
-      self.active_view = Some(view);
+      self.active_view = Some(view_id);
     }
 
-    Ok(view)
+    Ok(view_id)
+  }
+
+  pub fn active_view(&self) -> Option<(ViewId, DocumentId)> {
+    self.active_view.map(|view_id| {
+      let document_id = self
+        .views
+        .get(view_id)
+        .expect("active view should exist")
+        .document_id;
+      (view_id, document_id)
+    })
   }
 
   pub fn create_document(&mut self) -> DocumentId {
@@ -78,16 +93,31 @@ impl Plugin for Editor {
   }
 
   fn process_event(
-    &self,
+    &mut self,
     app: &mut Application,
-    event: &Event,
+    event: &TuiEvent,
   ) -> Result<ProcessEvent, PluginError> {
-    if let Event::Key(key) = event {
-      if let KeyCode::Char('q') = key.code {
-        println!("Quitting");
-        if let Err(e) = app.quit() {
-          tracing::error!("Failed to quit: {}", e);
+    if let TuiEvent::Key(key) = event {
+      match key.code {
+        KeyCode::Char('q') => {
+          println!("Quitting");
+          if let Err(e) = app.quit() {
+            tracing::error!("Failed to quit: {}", e);
+          }
         }
+        KeyCode::Char('w') => {
+          if let Some((view_id, document_id)) = self.active_view() {
+            let document = self
+              .documents
+              .get_mut(document_id)
+              .expect("document not present");
+
+            document
+              .process(&view_id, &DocEvent::MoveWord)
+              .map_err(AnyError::from)?;
+          }
+        }
+        _ => (),
       }
     }
 
@@ -97,16 +127,37 @@ impl Plugin for Editor {
   fn render(
     &mut self,
     _app: &mut Application,
-    _area: &Rect,
+    area: &Rect,
     frame: &mut TuiBuffer,
   ) {
     // render the active view and the command bar
     // or is the command bar a separate plugin?
-    frame.set_string(0, 0, "Hello World", Style::default());
+    // frame.set_string(0, 0, "Hello World", Style::default());
+    if let Some((view_id, document_id)) = self.active_view() {
+      // TODO: get offset of view
+      let document = self
+        .documents
+        .get_mut(document_id)
+        .expect("document not present");
+
+      for (line, text) in
+        document.rope.lines().enumerate().take(area.height as usize)
+      {
+        frame.set_string(0, line as u16, text.to_string(), Style::default());
+      }
+    }
   }
 
   fn cursor(&self, _area: Rect) -> Option<(u16, u16)> {
-    Some((5, 0))
+    self.active_view().map(|(view_id, document_id)| {
+      let document = self
+        .documents
+        .get(document_id)
+        .expect("document not present");
+      let (pos, line) =
+        document.cursor.get(&view_id).expect("cursor not present");
+      (*pos as u16, *line as u16)
+    })
   }
 }
 

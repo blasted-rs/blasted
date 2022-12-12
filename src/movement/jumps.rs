@@ -1,4 +1,5 @@
 use ropey::RopeSlice;
+use crate::util::char::CharExt;
 
 pub fn next_word(
   r: &RopeSlice,
@@ -9,20 +10,26 @@ pub fn next_word(
 
   // "wo|rd  second"
   let mut whitespace = false;
-  let mut offset = 0;
+  let mut pos_offset = *pos;
+  let mut line_offset = *line;
   #[allow(clippy::while_let_on_iterator)]
   while let Some(c) = chars.next() {
     if c.is_whitespace() {
       whitespace = true;
+      if c.is_line_ending() {
+        line_offset += 1;
+        pos_offset = 0;
+        continue;
+      }
     }
 
     if c.is_alphanumeric() && whitespace {
       break;
     }
-    offset += 1;
+    pos_offset += 1;
   }
 
-  (*line, *pos + offset)
+  (line_offset, pos_offset)
 }
 
 #[test]
