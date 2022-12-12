@@ -1,5 +1,6 @@
 use {
   crate::editor::Editor,
+
   crossterm::event::{Event, EventStream},
   futures::StreamExt,
   std::collections::VecDeque,
@@ -39,9 +40,8 @@ pub trait Plugin {
   /// Get cursor position and cursor kind.
   fn cursor(
     &self,
-    _app: &mut Application,
     _area: Rect,
-  ) -> Option<(usize, usize)> {
+  ) -> Option<(u16, u16)> {
     None
   }
   /// Render the plugin onto the provided surface.
@@ -162,13 +162,28 @@ impl Application {
                   }
                   self.active_plugins.append(&mut processed_plugins);
 
-                  // the last plugin to redner is our editor plugin
+                  // the last plugin to render is our editor plugin
                   if let Some(mut editor) = self.editor.take() {
                       editor.render(self, &area, surface);
                       self.editor = Some(editor);
                   }
 
-                  terminal.draw(|f| f.set_cursor(0, 0))?;
+                  // set the cursor position
+                  let mut cursor = self.active_plugins
+                      .iter()
+                      .rev()
+                      .find_map(|p| p.cursor(area));
+
+                  // when no cursor set yet, try the editor
+                  if cursor.is_none() {
+                      if let Some(editor) = &self.editor {
+                          cursor = editor.cursor(area);
+                      }
+                  }
+
+                  // set the cursor
+                  let (x,y) = cursor.unwrap_or((0,0));
+                  terminal.draw(|f| f.set_cursor(x, y))?;
               }
           }
       }

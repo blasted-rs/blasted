@@ -1,21 +1,13 @@
-use crossterm::event::KeyCode;
-use tui::style::Style;
-
 use {
   crate::{
-    application::{
-      Application,
-      Plugin,
-      PluginError,
-      ProcessEvent,
-    },
+    application::{Application, Plugin, PluginError, ProcessEvent},
     document::{Document, DocumentError, DocumentId},
     view::{View, ViewId},
   },
-  crossterm::event::Event,
+  crossterm::event::{Event, KeyCode},
   slotmap::SlotMap,
   thiserror::Error,
-  tui::{buffer::Buffer as TuiBuffer, layout::Rect},
+  tui::{buffer::Buffer as TuiBuffer, layout::Rect, style::Style},
 };
 
 #[derive(Default)]
@@ -87,17 +79,16 @@ impl Plugin for Editor {
 
   fn process_event(
     &self,
-    _app: &mut Application,
-    _event: &Event,
+    app: &mut Application,
+    event: &Event,
   ) -> Result<ProcessEvent, PluginError> {
-
-    if let Event::Key(key) = _event {
-        if let KeyCode::Char('q') = key.code {
-            println!("Quitting");
-            if let Err(e) = _app.quit() {
-                tracing::error!("Failed to quit: {}", e);
-            }
+    if let Event::Key(key) = event {
+      if let KeyCode::Char('q') = key.code {
+        println!("Quitting");
+        if let Err(e) = app.quit() {
+          tracing::error!("Failed to quit: {}", e);
         }
+      }
     }
 
     Ok(ProcessEvent::Consumed)
@@ -112,6 +103,10 @@ impl Plugin for Editor {
     // render the active view and the command bar
     // or is the command bar a separate plugin?
     frame.set_string(0, 0, "Hello World", Style::default());
+  }
+
+  fn cursor(&self, _area: Rect) -> Option<(u16, u16)> {
+    Some((5, 0))
   }
 }
 
