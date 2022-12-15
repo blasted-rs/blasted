@@ -89,17 +89,18 @@ impl Application {
     }
   }
 
-  // returns the first editor it can find walking first through the active plugins
-  // and then through the inactive plugins
-  pub fn editor_safe(&mut self) -> Option<&mut Editor> {
+  pub fn editor(&mut self) -> &mut Editor {
+      self.find_plugin::<Editor>().expect("editor plugin not found")
+  }
+
+  pub fn find_plugin<P>(&mut self) -> Option<&mut P>
+  where
+    P: Plugin,
+  {
     self
       .active_plugins
       .iter_mut().chain(self.plugins.iter_mut())
-      .find_map(|p| p.as_mut().downcast_mut::<Editor>())
-  }
-
-  pub fn editor(&mut self) -> &mut Editor {
-      self.editor_safe().expect("editor plugin not found")
+      .find_map(|p| p.as_mut().downcast_mut::<P>())
   }
 
   pub fn register_plugin(&mut self, plugin: Box<dyn Plugin>) {
