@@ -1,8 +1,10 @@
+use as_any::{AsAny, Downcast};
+
 use {
   crate::editor::Editor,
   crossterm::event::{Event as TuiEvent, EventStream},
   futures::StreamExt,
-  std::collections::VecDeque,
+  std::{any::Any, collections::VecDeque},
   thiserror::Error,
   tokio::sync::mpsc::{error::SendError, UnboundedSender},
   tui::{
@@ -26,7 +28,7 @@ pub enum ProcessEvent {
   Ignored,
 }
 
-pub trait Plugin {
+pub trait Plugin: AsAny {
   fn id(&self) -> Option<&'static str>;
   fn type_name(&self) -> &'static str {
     std::any::type_name::<Self>()
@@ -69,7 +71,6 @@ pub enum Command {
 }
 
 pub struct Application {
-  pub editor: Option<Editor>,
   plugins: Vec<Box<dyn Plugin>>,
   active_plugins: VecDeque<Box<dyn Plugin>>,
   terminal: Option<TuiTerminal>,
@@ -80,11 +81,25 @@ impl Application {
   pub fn new(terminal: TuiTerminal) -> Application {
     Self {
       terminal: Some(terminal),
-      editor: Some(Editor::default()),
       plugins: Vec::new(),
-      active_plugins: VecDeque::new(),
+      active_plugins: VecDeque::from_iter(vec![
+        Box::<Editor>::default() as Box<dyn Plugin>
+      ]),
       cmd: None,
     }
+  }
+
+  // returns the first editor it can find walking first through the active plugins
+  // and then through the inactive plugins
+  pub fn editor_safe(&mut self) -> Option<&mut Editor> {
+    self
+      .active_plugins
+      .iter_mut().chain(self.plugins.iter_mut())
+      .find_map(|p| p.as_mut().downcast_mut::<Editor>())
+  }
+
+  pub fn editor(&mut self) -> &mut Editor {
+      self.editor_safe().expect("editor plugin not found")
   }
 
   pub fn register_plugin(&mut self, plugin: Box<dyn Plugin>) {
@@ -114,6 +129,7 @@ impl Application {
     loop {
       tokio::select! {
         cmd = cmd_rx.recv() => {
+          #[allow(clippy::single_match)]
           match cmd {
             Some(Command::Quit) => {
               return Ok(());
@@ -125,10 +141,9 @@ impl Application {
         Ok(event) = fused_events.select_next_some() => {
           // first process the event with the active plugins, notice
           // we are moving the plugin out of the active_plugins list
-          let mut consumed = false;
           let mut processed_plugins = VecDeque::new();
           while let Some(mut plugin) = self.active_plugins.pop_back() {
-            consumed =
+            let consumed =
               matches!(plugin.process_event(self, &event)?, ProcessEvent::Consumed);
             processed_plugins.push_front(plugin);
             if consumed {
@@ -137,14 +152,6 @@ impl Application {
           }
           // restoring the plugins
           self.active_plugins.append(&mut processed_plugins);
-
-          // now process the event with on editor
-          if !consumed {
-            if let Some(mut editor) = self.editor.take() {
-              editor.process_event(self, &event)?;
-              self.editor = Some(editor);
-            }
-          }
 
           // now after we processed all the events
           // lets render the plugins
@@ -160,24 +167,11 @@ impl Application {
             }
             self.active_plugins.append(&mut processed_plugins);
 
-            // the last plugin to render is our editor plugin
-            if let Some(mut editor) = self.editor.take() {
-              editor.render(self, &area, surface);
-              self.editor = Some(editor);
-            }
-
-            // set the cursor position
-            let mut cursor = self.active_plugins
+            // set the cursor position, first one wins
+            let cursor = self.active_plugins
               .iter()
               .rev()
               .find_map(|p| p.cursor(area));
-
-            // when no cursor set yet, try the editor
-            if cursor.is_none() {
-              if let Some(editor) = &self.editor {
-                cursor = editor.cursor(area);
-              }
-            }
 
             // set the cursor
             let (line,pos) = cursor.unwrap_or((0,0));
