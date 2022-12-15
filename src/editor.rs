@@ -2,6 +2,7 @@ use {
   crate::{
     application::{Application, Plugin, PluginError, ProcessEvent},
     document::{DocEvent, Document, DocumentError, DocumentId},
+    keymap::ViKeymap,
     view::{View, ViewId},
   },
   anyhow::Error as AnyError,
@@ -16,6 +17,7 @@ pub struct Editor {
   pub views: SlotMap<ViewId, View>,
   pub documents: SlotMap<DocumentId, Document>,
   pub active_view: Option<ViewId>,
+  pub keymap: ViKeymap, // TOOD: make this configurable
 }
 
 #[derive(Debug, Error)]
@@ -97,24 +99,26 @@ impl Plugin for Editor {
     app: &mut Application,
     event: &TuiEvent,
   ) -> Result<ProcessEvent, PluginError> {
+    if let Some((view_id, document_id)) = self.active_view() {
+      let document = self
+        .documents
+        .get_mut(document_id)
+        .expect("document not present");
+
+      if let Some(events) = self.keymap.process_event(event) {
+        for event in events {
+          document.process(&view_id, &event).map_err(AnyError::from)?;
+        }
+      }
+    }
+
+    // temporary quit
     if let TuiEvent::Key(key) = event {
       match key.code {
         KeyCode::Char('q') => {
           println!("Quitting");
           if let Err(e) = app.quit() {
             tracing::error!("Failed to quit: {}", e);
-          }
-        }
-        KeyCode::Char('w') => {
-          if let Some((view_id, document_id)) = self.active_view() {
-            let document = self
-              .documents
-              .get_mut(document_id)
-              .expect("document not present");
-
-            document
-              .process(&view_id, &DocEvent::MoveWord)
-              .map_err(AnyError::from)?;
           }
         }
         _ => (),

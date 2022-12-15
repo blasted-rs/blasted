@@ -9,7 +9,18 @@ use {
 new_key_type! { pub struct DocumentId; }
 
 pub enum DocEvent {
-  MoveWord,
+  MoveWordForward,
+  MoveCursorLeft,
+  MoveCursorDown,
+  MoveCursorUp,
+  MoveCursorRight,
+  MoveWordBackward,
+  MoveWordEnd,
+  MoveLineStart,
+  MoveLineEnd,
+  MoveDocumentEnd,
+  MoveDocumentStart,
+  DeleteChar,
 }
 
 #[derive(Error, Debug)]
@@ -59,12 +70,10 @@ impl Document {
     // TODO: better error type
     let rope = self.rope.slice(..);
 
-    match event {
-      DocEvent::MoveWord => {
-        self.cursor.entry(*view_id).and_modify(|c| {
-          *c = movement::jumps::next_word(&rope, c);
-        });
-      }
+    if let DocEvent::MoveWordForward = event {
+      self.cursor.entry(*view_id).and_modify(|c| {
+        *c = movement::jumps::next_word(&rope, c);
+      });
     }
 
     Ok(())
@@ -96,10 +105,14 @@ mod tests {
     let view_id = ViewId::default();
     document.new_view(view_id);
 
-    document.process(&view_id, &DocEvent::MoveWord).unwrap();
+    document
+      .process(&view_id, &DocEvent::MoveWordForward)
+      .unwrap();
     assert_eq!(document.cursor.get(&view_id), Some(&(0, 4)));
 
-    document.process(&view_id, &DocEvent::MoveWord).unwrap();
+    document
+      .process(&view_id, &DocEvent::MoveWordForward)
+      .unwrap();
     assert_eq!(document.cursor.get(&view_id), Some(&(0, 8)));
   }
 
