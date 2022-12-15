@@ -133,7 +133,7 @@ impl Plugin for Editor {
     // render the active view and the command bar
     // or is the command bar a separate plugin?
     // frame.set_string(0, 0, "Hello World", Style::default());
-    if let Some((view_id, document_id)) = self.active_view() {
+    if let Some((_view_id, document_id)) = self.active_view() {
       // TODO: get offset of view
       let document = self
         .documents

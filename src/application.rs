@@ -1,10 +1,9 @@
-use as_any::{AsAny, Downcast};
-
 use {
   crate::editor::Editor,
+  as_any::{AsAny, Downcast},
   crossterm::event::{Event as TuiEvent, EventStream},
   futures::StreamExt,
-  std::{any::Any, collections::VecDeque},
+  std::collections::VecDeque,
   thiserror::Error,
   tokio::sync::mpsc::{error::SendError, UnboundedSender},
   tui::{
@@ -89,8 +88,12 @@ impl Application {
     }
   }
 
+  /// helper to find the editor plugin, it asssumes it is present
+  /// and will return the first instance found
   pub fn editor(&mut self) -> &mut Editor {
-      self.find_plugin::<Editor>().expect("editor plugin not found")
+    self
+      .find_plugin::<Editor>()
+      .expect("editor plugin not found")
   }
 
   pub fn find_plugin<P>(&mut self) -> Option<&mut P>
@@ -99,7 +102,8 @@ impl Application {
   {
     self
       .active_plugins
-      .iter_mut().chain(self.plugins.iter_mut())
+      .iter_mut()
+      .chain(self.plugins.iter_mut())
       .find_map(|p| p.as_mut().downcast_mut::<P>())
   }
 
