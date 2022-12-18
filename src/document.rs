@@ -71,32 +71,39 @@ impl Document {
     let rope = self.rope.slice(..);
 
     match event {
-        DocEvent::MoveWordForward => {
-          self.cursor.entry(*view_id).and_modify(|c| {
-            *c = movement::jumps::next_word(&rope, c);
-          });
+      DocEvent::MoveWordForward => {
+        self.cursor.entry(*view_id).and_modify(|c| {
+          *c = movement::jumps::next_word(&rope, c);
+        });
+      }
+      DocEvent::MoveCursorLeft => {
+        self.cursor.entry(*view_id).and_modify(|c| {
+          *c = movement::cursor_left(&rope, c);
+        });
+      }
+      DocEvent::MoveCursorRight => {
+        self.cursor.entry(*view_id).and_modify(|c| {
+          *c = movement::cursor_right(&rope, c);
+        });
+      }
 
-        },
-        DocEvent::MoveCursorLeft => {
-            self.cursor.entry(*view_id).and_modify(|c| {
-              *c = movement::cursor_left(&rope, c);
-            });
-        },
-        DocEvent::MoveCursorRight => {
-            self.cursor.entry(*view_id).and_modify(|c| {
-              *c = movement::cursor_right(&rope, c);
-            });
-        },
-        DocEvent::MoveCursorDown => todo!(),
-        DocEvent::MoveCursorUp => todo!(),
-        DocEvent::MoveWordBackward => todo!(),
-        DocEvent::MoveWordEnd => todo!(),
-        DocEvent::MoveLineStart => todo!(),
-        DocEvent::MoveLineEnd => todo!(),
-        DocEvent::MoveDocumentEnd => todo!(),
-        DocEvent::MoveDocumentStart => todo!(),
-        DocEvent::DeleteChar => todo!(),
-
+      DocEvent::MoveCursorUp => {
+        self.cursor.entry(*view_id).and_modify(|c| {
+          *c = movement::cursor_up(&rope, c);
+        });
+      }
+      DocEvent::MoveCursorDown => {
+        self.cursor.entry(*view_id).and_modify(|c| {
+          *c = movement::cursor_down(&rope, c);
+        });
+      },
+      DocEvent::MoveWordBackward => todo!(),
+      DocEvent::MoveWordEnd => todo!(),
+      DocEvent::MoveLineStart => todo!(),
+      DocEvent::MoveLineEnd => todo!(),
+      DocEvent::MoveDocumentEnd => todo!(),
+      DocEvent::MoveDocumentStart => todo!(),
+      DocEvent::DeleteChar => todo!(),
     }
 
     Ok(())
