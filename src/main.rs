@@ -1,61 +1,21 @@
 use {
   anyhow::Result,
-  blasted::Document,
-  crossterm::{
-    self,
-    event::{
-      DisableMouseCapture,
-      EnableMouseCapture,
-      Event,
-      EventStream,
-      KeyCode,
-      KeyEvent,
-    },
-    execute,
-    terminal::disable_raw_mode,
-  },
-  futures::StreamExt,
-  std::str::FromStr,
+  blasted::{application::Application, term},
 };
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
-  let _core = Document::from_str("Hello world!");
+  let (terminal, mut event_stream) = term::claim_terminal()?;
 
-  // use crossterm to set terminal into raw mode
-  // and then restore it when the program exits
-  // while capturing stdin and read on the EventStream
-  // while printing the events to stdout
+  // run the main application loop for the terminal
+  let mut app = Application::new(terminal);
 
-  crossterm::terminal::enable_raw_mode().unwrap();
+  // find the editor plugin call open on it
+  app.editor().open("src/main.rs")?;
 
-  let mut stdout = std::io::stdout();
-  execute!(stdout, EnableMouseCapture)?;
+  app.run(&mut event_stream).await?;
 
-  let mut reader = EventStream::new();
-  loop {
-    match reader.next().await {
-      Some(Ok(event)) => {
-        println!("{:?}", event);
-        if let Event::Key(KeyEvent {
-          code: KeyCode::Char('q'),
-          ..
-        }) = event
-        {
-          break;
-        }
-      }
-      Some(Err(e)) => {
-        println!("Error: {:?}", e);
-        break;
-      }
-      None => break,
-    }
-  }
-
-  execute!(stdout, DisableMouseCapture)?;
-
-  disable_raw_mode()?;
+  term::restore_terminal()?;
 
   Ok(())
 }

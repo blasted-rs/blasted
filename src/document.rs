@@ -8,14 +8,27 @@ use {
 
 new_key_type! { pub struct DocumentId; }
 
-pub enum Event {
-  MoveWord,
+pub enum DocEvent {
+  MoveWordForward,
+  MoveCursorLeft,
+  MoveCursorDown,
+  MoveCursorUp,
+  MoveCursorRight,
+  MoveWordBackward,
+  MoveWordEnd,
+  MoveLineStart,
+  MoveLineEnd,
+  MoveDocumentEnd,
+  MoveDocumentStart,
+  DeleteChar,
 }
 
 #[derive(Error, Debug)]
 pub enum DocumentError {
   #[error("Trying to access a non-existent view")]
   ViewNotPresent,
+  #[error(transparent)]
+  IoError(#[from] std::io::Error),
 }
 
 pub type DocumentResult<T> = Result<T, DocumentError>;
@@ -31,10 +44,24 @@ impl Document {
     self.cursor.insert(view, Default::default());
   }
 
+  pub fn from_reader(
+    path: impl AsRef<std::path::Path>,
+  ) -> DocumentResult<Self> {
+    let rope = Rope::from_reader(std::fs::File::open(path)?)?;
+    Ok(Self {
+      rope,
+      cursor: Default::default(),
+    })
+  }
+
+  pub fn lines(&'_ self) -> impl Iterator<Item = String> + '_ {
+    self.rope.lines().map(|line| line.to_string())
+  }
+
   pub fn process(
     &mut self,
     view_id: &ViewId,
-    event: Event,
+    event: &DocEvent,
   ) -> DocumentResult<()> {
     if !self.cursor.contains_key(view_id) {
       return Err(DocumentError::ViewNotPresent);
@@ -43,12 +70,10 @@ impl Document {
     // TODO: better error type
     let rope = self.rope.slice(..);
 
-    match event {
-      Event::MoveWord => {
-        self.cursor.entry(*view_id).and_modify(|c| {
-          *c = movement::jumps::next_word(&rope, c);
-        });
-      }
+    if let DocEvent::MoveWordForward = event {
+      self.cursor.entry(*view_id).and_modify(|c| {
+        *c = movement::jumps::next_word(&rope, c);
+      });
     }
 
     Ok(())
@@ -80,10 +105,14 @@ mod tests {
     let view_id = ViewId::default();
     document.new_view(view_id);
 
-    document.process(&view_id, Event::MoveWord).unwrap();
+    document
+      .process(&view_id, &DocEvent::MoveWordForward)
+      .unwrap();
     assert_eq!(document.cursor.get(&view_id), Some(&(0, 4)));
 
-    document.process(&view_id, Event::MoveWord).unwrap();
+    document
+      .process(&view_id, &DocEvent::MoveWordForward)
+      .unwrap();
     assert_eq!(document.cursor.get(&view_id), Some(&(0, 8)));
   }
 
