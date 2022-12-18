@@ -70,10 +70,29 @@ impl Document {
     // TODO: better error type
     let rope = self.rope.slice(..);
 
-    if let DocEvent::MoveWordForward = event {
-      self.cursor.entry(*view_id).and_modify(|c| {
-        *c = movement::jumps::next_word(&rope, c);
-      });
+    match event {
+        DocEvent::MoveWordForward => {
+          self.cursor.entry(*view_id).and_modify(|c| {
+            *c = movement::jumps::next_word(&rope, c);
+          });
+
+        },
+        DocEvent::MoveCursorLeft => {
+            self.cursor.entry(*view_id).and_modify(|c| {
+              *c = movement::cursor_left(&rope, c);
+            });
+        },
+        DocEvent::MoveCursorDown => todo!(),
+        DocEvent::MoveCursorUp => todo!(),
+        DocEvent::MoveCursorRight => todo!(),
+        DocEvent::MoveWordBackward => todo!(),
+        DocEvent::MoveWordEnd => todo!(),
+        DocEvent::MoveLineStart => todo!(),
+        DocEvent::MoveLineEnd => todo!(),
+        DocEvent::MoveDocumentEnd => todo!(),
+        DocEvent::MoveDocumentStart => todo!(),
+        DocEvent::DeleteChar => todo!(),
+
     }
 
     Ok(())
