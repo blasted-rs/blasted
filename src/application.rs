@@ -14,7 +14,6 @@ use {
   },
 };
 
-
 #[derive(Debug, Error)]
 pub enum PluginError {
   #[error("Could not initialize plugin {0}")]

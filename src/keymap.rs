@@ -63,7 +63,7 @@ impl ViKeymap {
     event: &TuiEvent,
   ) -> Option<Vec<DocEvent>> {
     if let TuiEvent::Key(key_event) = event {
-        match key_event.code {
+      match key_event.code {
         KeyCode::Esc => {
           self.mode = Mode::Normal;
           None
@@ -72,7 +72,7 @@ impl ViKeymap {
         _ => None,
       }
     } else {
-        None
+      None
     }
   }
 
@@ -81,7 +81,7 @@ impl ViKeymap {
     event: &TuiEvent,
   ) -> Option<Vec<DocEvent>> {
     if let TuiEvent::Key(key_event) = event {
-        match key_event.code {
+      match key_event.code {
         KeyCode::Esc => {
           self.mode = Mode::Normal;
           None
@@ -90,7 +90,7 @@ impl ViKeymap {
         _ => None,
       }
     } else {
-        None
+      None
     }
   }
 

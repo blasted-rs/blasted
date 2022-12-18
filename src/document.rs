@@ -96,7 +96,7 @@ impl Document {
         self.cursor.entry(*view_id).and_modify(|c| {
           *c = movement::cursor_down(&rope, c);
         });
-      },
+      }
       DocEvent::MoveWordBackward => todo!(),
       DocEvent::MoveWordEnd => todo!(),
       DocEvent::MoveLineStart => todo!(),

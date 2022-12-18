@@ -1,5 +1,4 @@
-use ropey::RopeSlice;
-use crate::util::char::CharExt;
+use {crate::util::char::CharExt, ropey::RopeSlice};
 
 pub fn next_word(
   r: &RopeSlice,
