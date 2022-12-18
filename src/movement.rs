@@ -20,3 +20,20 @@ pub fn cursor_left(
     (*line, *pos - 1)
   }
 }
+
+pub fn cursor_right(
+  rope: &RopeSlice,
+  (line, pos): &(usize, usize),
+) -> (usize, usize) {
+  // we are at the end of the line
+  if *pos == rope.line(*line).len_chars() {
+    if *line == rope.len_lines() - 1 {
+      (*line, *pos)
+    } else {
+      (line + 1, 0)
+    }
+    // we are somewhere in the middle of the line
+  } else {
+    (*line, *pos + 1)
+  }
+}

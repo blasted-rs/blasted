@@ -82,9 +82,13 @@ impl Document {
               *c = movement::cursor_left(&rope, c);
             });
         },
+        DocEvent::MoveCursorRight => {
+            self.cursor.entry(*view_id).and_modify(|c| {
+              *c = movement::cursor_right(&rope, c);
+            });
+        },
         DocEvent::MoveCursorDown => todo!(),
         DocEvent::MoveCursorUp => todo!(),
-        DocEvent::MoveCursorRight => todo!(),
         DocEvent::MoveWordBackward => todo!(),
         DocEvent::MoveWordEnd => todo!(),
         DocEvent::MoveLineStart => todo!(),
